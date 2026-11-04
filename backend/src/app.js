@@ -1,59 +1,75 @@
+require("dotenv").config();
 
-require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
 
-const express = require('express');
-const cors = require('cors');
-const sequelize = require('./config/database');
+const { sequelize } = require("./models");
+
+const categoriaRoutes = require("./routes/categoriaRoutes");
+const proveedorRoutes = require("./routes/proveedorRoutes");
+const empleadoRoutes = require("./routes/empleadoRoutes");
+const productoRoutes = require("./routes/productoRoutes");
+const movimientoRoutes = require("./routes/movimientoRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Ruta principal
-app.get('/', (req, res) => {
+app.get("/", (req, res) => {
   res.json({
-    message: 'API del Sistema de Gestión de Inventario',
-    status: 'Servidor funcionando'
+    mensaje: "GameVault API",
+    estado: "Funcionando",
   });
 });
 
-// Ruta de salud
-app.get('/api/health', async (req, res) => {
+app.get("/api/health", async (req, res) => {
   try {
     await sequelize.authenticate();
 
-    res.status(200).json({
-      status: 'OK',
-      message: 'Servidor y base de datos conectados'
+    res.json({
+      estado: "OK",
+      baseDatos: "Conectada",
     });
   } catch (error) {
     res.status(500).json({
-      status: 'ERROR',
-      message: 'No se pudo conectar con PostgreSQL'
+      estado: "ERROR",
+      mensaje: "No se pudo conectar con PostgreSQL.",
     });
   }
 });
 
-// Iniciar servidor
+app.use("/api/categorias", categoriaRoutes);
+app.use("/api/proveedores", proveedorRoutes);
+app.use("/api/empleados", empleadoRoutes);
+app.use("/api/productos", productoRoutes);
+app.use("/api/movimientos", movimientoRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({
+    mensaje: "Ruta no encontrada.",
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 
-const startServer = async () => {
+const iniciarServidor = async () => {
   try {
     await sequelize.authenticate();
 
-    console.log('Conexión con PostgreSQL establecida correctamente');
+    console.log("Conexión con PostgreSQL establecida.");
 
     app.listen(PORT, () => {
-      console.log(`Servidor funcionando en http://localhost:${PORT}`);
+      console.log(`GameVault API ejecutándose en http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error('Error al conectar con PostgreSQL:', error.message);
+    console.error("Error al iniciar el servidor:", error);
     process.exit(1);
   }
 };
 
-startServer();
+iniciarServidor();
 
 module.exports = app;
