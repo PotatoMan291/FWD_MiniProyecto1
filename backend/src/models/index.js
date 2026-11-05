@@ -5,6 +5,7 @@ const Proveedor = require("./Proveedor");
 const Producto = require("./Producto");
 const Empleado = require("./Empleado");
 const MovimientoInventario = require("./MovimientoInventario");
+const Usuario = require("./Usuario");
 
 // Una categoría tiene muchos productos
 Categoria.hasMany(Producto, {
@@ -57,4 +58,5 @@ module.exports = {
   Producto,
   Empleado,
   MovimientoInventario,
+  Usuario,
 };

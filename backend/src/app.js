@@ -11,6 +11,7 @@ const empleadoRoutes = require("./routes/empleadoRoutes");
 const productoRoutes = require("./routes/productoRoutes");
 const movimientoRoutes = require("./routes/movimientoRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/empleados", empleadoRoutes);
 app.use("/api/productos", productoRoutes);
 app.use("/api/movimientos", movimientoRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
