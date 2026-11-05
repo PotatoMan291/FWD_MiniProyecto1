@@ -42,6 +42,28 @@ module.exports = {
     }
   },
 
+  actualizar: async (req, res) => {
+    try {
+      const movimiento = await service.actualizar(req.params.id, req.body);
+
+      if (!movimiento) {
+        return res.status(404).json({
+          mensaje: "Movimiento no encontrado.",
+        });
+      }
+
+      res.json(movimiento);
+    } catch (error) {
+      if (error.message) {
+        return res.status(400).json({
+          mensaje: error.message,
+        });
+      }
+
+      manejarError(res, error);
+    }
+  },
+
   eliminar: async (req, res) => {
     try {
       const resultado = await service.eliminar(req.params.id);

@@ -27,8 +27,56 @@ const obtener = (id) =>
     include: relaciones,
   });
 
+const validarCantidad = (cantidad) => {
+  const valor = Number(cantidad);
+
+  if (!Number.isInteger(valor) || valor <= 0) {
+    throw new Error("La cantidad debe ser un número entero mayor que cero.");
+  }
+
+  return valor;
+};
+
+const aplicarMovimiento = (producto, tipo, cantidad) => {
+  if (tipo === "ENTRADA") {
+    producto.stock += cantidad;
+  } else if (tipo === "SALIDA") {
+    if (producto.stock < cantidad) {
+      throw new Error("No hay suficiente stock para registrar esta salida.");
+    }
+
+    producto.stock -= cantidad;
+  } else if (tipo === "AJUSTE") {
+    // En un AJUSTE, cantidad representa el stock final deseado.
+    producto.stock = cantidad;
+  } else {
+    throw new Error("El tipo debe ser ENTRADA, SALIDA o AJUSTE.");
+  }
+};
+
+const revertirMovimiento = (producto, tipo, cantidad) => {
+  if (tipo === "ENTRADA") {
+    producto.stock -= cantidad;
+  } else if (tipo === "SALIDA") {
+    producto.stock += cantidad;
+  } else if (tipo === "AJUSTE") {
+    // No se conoce el stock anterior a este ajuste.
+    throw new Error(
+      "No se puede modificar un movimiento AJUSTE porque no se conoce el stock anterior.",
+    );
+  }
+
+  if (producto.stock < 0) {
+    throw new Error(
+      "No se puede modificar el movimiento porque dejaría el stock negativo.",
+    );
+  }
+};
+
 const crear = async (datos) => {
   return sequelize.transaction(async (transaction) => {
+    const cantidad = validarCantidad(datos.cantidad);
+
     const producto = await Producto.findByPk(datos.id_producto, {
       transaction,
       lock: transaction.LOCK.UPDATE,
@@ -38,32 +86,112 @@ const crear = async (datos) => {
       throw new Error("El producto indicado no existe.");
     }
 
-    const cantidad = Number(datos.cantidad);
+    const empleado = await Empleado.findByPk(datos.id_empleado, {
+      transaction,
+    });
 
-    if (!Number.isInteger(cantidad) || cantidad <= 0) {
-      throw new Error("La cantidad debe ser un número entero mayor que cero.");
+    if (!empleado) {
+      throw new Error("El empleado indicado no existe.");
     }
 
-    if (datos.tipo === "SALIDA" && producto.stock < cantidad) {
-      throw new Error("No hay suficiente stock para registrar esta salida.");
-    }
-
-    if (datos.tipo === "ENTRADA") {
-      producto.stock += cantidad;
-    } else if (datos.tipo === "SALIDA") {
-      producto.stock -= cantidad;
-    } else if (datos.tipo === "AJUSTE") {
-      // Para AJUSTE, cantidad representa el stock final deseado.
-      producto.stock = cantidad;
-    } else {
-      throw new Error("El tipo debe ser ENTRADA, SALIDA o AJUSTE.");
-    }
+    aplicarMovimiento(producto, datos.tipo, cantidad);
 
     await producto.save({ transaction });
 
-    const movimiento = await MovimientoInventario.create(datos, {
+    const movimiento = await MovimientoInventario.create(
+      {
+        ...datos,
+        cantidad,
+      },
+      { transaction },
+    );
+
+    return MovimientoInventario.findByPk(movimiento.id_movimiento, {
+      include: relaciones,
       transaction,
     });
+  });
+};
+
+const actualizar = async (id, datos) => {
+  return sequelize.transaction(async (transaction) => {
+    const movimiento = await MovimientoInventario.findByPk(id, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!movimiento) {
+      return null;
+    }
+
+    // No se puede revertir un AJUSTE sin guardar el stock previo.
+    if (movimiento.tipo === "AJUSTE") {
+      throw new Error(
+        "No se puede modificar un movimiento AJUSTE porque no se conoce el stock anterior.",
+      );
+    }
+
+    const cantidadNueva = validarCantidad(
+      datos.cantidad ?? movimiento.cantidad,
+    );
+
+    const tipoNuevo = datos.tipo ?? movimiento.tipo;
+    const idProductoNuevo = datos.id_producto ?? movimiento.id_producto;
+    const idEmpleadoNuevo = datos.id_empleado ?? movimiento.id_empleado;
+
+    const productoAnterior = await Producto.findByPk(movimiento.id_producto, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!productoAnterior) {
+      throw new Error("El producto asociado al movimiento no existe.");
+    }
+
+    let productoNuevo = productoAnterior;
+
+    if (Number(idProductoNuevo) !== Number(movimiento.id_producto)) {
+      productoNuevo = await Producto.findByPk(idProductoNuevo, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!productoNuevo) {
+        throw new Error("El producto indicado no existe.");
+      }
+    }
+
+    const empleado = await Empleado.findByPk(idEmpleadoNuevo, {
+      transaction,
+    });
+
+    if (!empleado) {
+      throw new Error("El empleado indicado no existe.");
+    }
+
+    // Primero revertimos el efecto del movimiento anterior.
+    revertirMovimiento(productoAnterior, movimiento.tipo, movimiento.cantidad);
+
+    // Luego aplicamos el movimiento actualizado.
+    aplicarMovimiento(productoNuevo, tipoNuevo, cantidadNueva);
+
+    await productoAnterior.save({ transaction });
+
+    if (productoNuevo.id_producto !== productoAnterior.id_producto) {
+      await productoNuevo.save({ transaction });
+    }
+
+    await movimiento.update(
+      {
+        tipo: tipoNuevo,
+        cantidad: cantidadNueva,
+        fecha: datos.fecha ?? movimiento.fecha,
+        observacion: datos.observacion ?? movimiento.observacion,
+        id_producto: idProductoNuevo,
+        id_empleado: idEmpleadoNuevo,
+      },
+      { transaction },
+    );
 
     return MovimientoInventario.findByPk(movimiento.id_movimiento, {
       include: relaciones,
@@ -112,4 +240,10 @@ const eliminar = async (id) => {
   });
 };
 
-module.exports = { listar, obtener, crear, eliminar };
+module.exports = {
+  listar,
+  obtener,
+  crear,
+  actualizar,
+  eliminar,
+};

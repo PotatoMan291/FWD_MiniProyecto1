@@ -11,5 +11,6 @@ router.get("/", controller.listar);
 router.get("/:id", controller.obtener);
 router.post("/", controller.crear);
 router.delete("/:id", controller.eliminar);
+router.put("/:id", controller.actualizar);
 
 module.exports = router;
